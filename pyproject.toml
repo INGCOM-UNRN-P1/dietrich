@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dietrich"
+version = "0.1.0"
+description = "Validador de cobertura lógica avanzada MC/DC (Modified Condition/Decision Coverage) en C"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.scripts]
+dietrich = "dietrich.cli:app"
+
+[project.entry-points."ripley.plugins"]
+mcdc_coverage = "dietrich.plugins.ripley_plugin:DietrichPlugin"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["src"]
