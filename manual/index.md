@@ -350,3 +350,12 @@ Podés encadenar `dietrich` con otras herramientas del ecosistema en una única 
 dietrich analyze src/auth.c --tests bin/test_suite --md reporte_mcdc.md
 ````
 
+---
+
+(manual-dietrich-seccion-plugins)=
+## 9. Extensión, Desarrollo de Plugins y API Python
+
+Para crear tus propias reglas, conectores de evaluación o integrar `dietrich` programáticamente en pipelines de CI/CD:
+
+- 👉 **Consultá la guía completa:** [Guía de Extensión y Creación de Plugins](plugins.md)
+
