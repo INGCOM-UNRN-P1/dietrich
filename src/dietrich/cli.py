@@ -18,14 +18,41 @@ app = typer.Typer(
 console = Console()
 
 
-@app.command()
+def generar_seccion_markdown(report: McDcAuditReport) -> str:
+    """Genera sección de auditoría de cobertura lógica MC/DC para Dredd."""
+    lines = ["## Cobertura Lógica MC/DC (Dietrich)\n"]
+    lines.append(f"- **Archivo analizado:** `{Path(report.target_file).name}`")
+    lines.append(f"- **Decisiones compuestas analizadas:** {report.compound_decisions_count}")
+    lines.append(f"- **Cobertura MC/DC estimada:** `{report.average_mcdc_coverage}%`\n")
+    if not report.decisions:
+        lines.append("> [!TIP]\n> **Lógica Simple:** Todas las condiciones y bifurcaciones son atómicas simples (no compuestas).\n")
+    else:
+        lines.append("| Línea | Condición Compuesta | Condiciones Atómicas | Vectores Req. (k+1) |")
+        lines.append("| :---: | :--- | :--- | :---: |")
+        for d in report.decisions:
+            atomics_str = ", ".join(f"`{a.id}: {a.expression}`" for a in d.atomic_conditions)
+            lines.append(f"| {d.line_number} | `{d.raw_condition}` | {atomics_str} | {d.required_vectors_count} |")
+        lines.append("")
+    return "\n".join(lines)
+
+
+@app.command("analyze")
+@app.command("check")
 def analyze(
     target_file: Path = typer.Argument(..., help="Archivo C a auditar por cobertura MC/DC", exists=True),
     min_coverage: float = typer.Option(80.0, "--min-coverage", "-m", help="Porcentaje mínimo de cobertura MC/DC"),
-    json_output: bool = typer.Option(False, "--json", help="Emitir salida en formato JSON estructurado")
+    json_output: bool = typer.Option(False, "--json", help="Emitir salida en formato JSON estructurado"),
+    output_md: Optional[Path] = typer.Option(None, "--md", "--output-md", help="Generar sección de reporte en formato Markdown para fusión en Dredd."),
 ):
     """Analiza condiciones booleanas compuestas (&&, ||) y calcula los vectores de prueba requeridos para MC/DC."""
     report = audit_mcdc_coverage(target_file)
+
+    if output_md:
+        md_text = generar_seccion_markdown(report)
+        output_md.parent.mkdir(parents=True, exist_ok=True)
+        output_md.write_text(md_text, encoding="utf-8")
+        console.print(f"[bold green]✓ Sección Markdown generada en:[/bold green] {output_md}")
+        raise typer.Exit(code=0 if report.passed else 1)
 
     if json_output:
         print(json.dumps(report.model_dump(), indent=2, ensure_ascii=False))
@@ -88,6 +115,22 @@ def analyze(
         f"[dim]↳ Cada condición atómica afecta de forma independiente el resultado final de la decisión.[/dim]",
         title="[bold cyan]DIETRICH MC/DC Summary[/bold cyan]"
     ))
+
+
+@app.command("report")
+def report_cmd(
+    target_file: Path = typer.Argument(..., help="Archivo C a auditar por cobertura MC/DC", exists=True),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Ruta de destino del archivo Markdown."),
+):
+    """Genera directamente la sección de reporte Markdown de DIETRICH para Dredd."""
+    report = audit_mcdc_coverage(target_file)
+    md_content = generar_seccion_markdown(report)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(md_content, encoding="utf-8")
+        console.print(f"[bold green]✓ Reporte Markdown generado en:[/bold green] {output}")
+    else:
+        print(md_content)
 
 
 @app.command()
