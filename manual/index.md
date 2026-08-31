@@ -179,3 +179,53 @@ check-dietrich:
 ````
 
 Ejecutá `make check-dietrich` antes de cada commit para asegurar que tu código conserve el estado de aprobación.
+
+---
+
+(manual-dietrich-arquitectura)=
+## 7. Arquitectura Interna y Mecanismo Técnico
+
+La herramienta **`dietrich`** implementa un motor de alta precisión basado en:
+
+- **Tecnología Núcleo:** `gcov / llvm-cov AST Instrumenter + Boolean Condition Parser + Truth Table Evaluator`.
+- **Aislamiento y Determinismo:** Diseñada para operar sin efectos colaterales en entornos de integración continua (CI), terminales de estudiantes y servidores docentes headless.
+- **Manejo de Errores Pedagógico:** Todo fallo de sintaxis, memoria o lógica se traduce en una acción prescriptiva concreta con su respectiva justificación técnica.
+
+---
+
+(manual-dietrich-ecosistema)=
+## 8. Integración y Conexión con el Ecosistema
+
+````{note}
+Ninguna herramienta opera de forma aislada. **`dietrich`** forma parte del pipeline integral de evaluación, verificación y enseñanza de la cátedra.
+````
+
+### Diagrama de Flujo e Interoperabilidad
+
+````{mermaid}
+graph TD
+    SRC[Código C + Tests Unitarios] --> DTR[Dietrich: Cobertura MC/DC]
+    DTR -->|Instrumentación Lógica| GCOV[gcov / llvm-cov Engine]
+    DTR -->|Tabla de Verdad y Pares| REP[Reporte de Cobertura]
+    DTR -->|Casos Faltantes| VAS[Vassili: Mutation Testing]
+    DTR -->|Métricas de Calidad| DRD[Dredd: Calificador Masivo]
+````
+
+### Matriz de Intercambio de Datos
+
+| Canal | Herramientas Conectadas | Tipo de Datos Transferidos |
+| :--- | :--- | :--- |
+| **Entradas (Inputs)** | - `Código C y suites de pruebas unitarias` | Código fuente, AST, binarios, testcases, contratos |
+| **Salidas (Outputs)** | - `dredd (reporte de cobertura lógica)`
+- `vassili (mutation testing)` | Informes Markdown, diagnósticos Rich, JSON, actas |
+| **Sincronización** | `vassili`, `drake`, `dredd` | Validación cruzada, flags compartidos y autofix |
+
+### Pipeline de Integración Recomendado
+
+Podés encadenar `dietrich` con otras herramientas del ecosistema en una única línea de comando:
+
+````{code-block} bash
+# Pipeline de integración típico
+dietrich analyze src/auth.c --tests bin/test_suite --md reporte_mcdc.md
+````
+
