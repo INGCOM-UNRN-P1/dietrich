@@ -4,6 +4,34 @@
 
 ---
 
+## 🎯 Alcance
+
+### Qué cubre
+- Medición y verificación estática y dinámica de cobertura lógica avanzada MC/DC (Modified Condition/Decision Coverage) en C.
+- Identificación de puntos de decisión condicional (`if`, `while`, operadores `&&`, `||`, ternarios `?:`).
+- Demostración de pares de prueba independientes que demuestran que cada condición elemental afecta el resultado de la decisión.
+- Reporte de cobertura MC/DC con porcentaje y pares faltantes.
+
+### Qué no cubre (Límites y Delegación)
+- Mutation testing de mutantes sintéticos (delegado a `vassili`).
+- Generación masiva de datos aleatorios (delegado a `tyrell`).
+- Cobertura básica de líneas / bloques gcov (delegado a GCC/gcov).
+
+---
+
+## 📋 Requisitos
+
+### Requisitos de Sistema y Entorno
+- Linux / WSL / POSIX. Python >= 3.10.
+
+### Dependencias Externas y Binarios
+- `gcc` (para compilación instrumentada).
+
+### Integración en el Ecosistema
+- CLI `dietrich`. Plugin en `ripley.plugins` (`mcdc_coverage`).
+
+---
+
 ## 🚀 Uso Rápido
 
 ```bash
