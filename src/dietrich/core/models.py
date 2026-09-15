@@ -28,6 +28,7 @@ class DecisionPoint(BaseModel):
 
 
 class McDcAuditReport(BaseModel):
+    schema_version: str = "1.0.0"
     source_file: str
     total_decisions_found: int = 0
     compound_decisions_count: int = 0

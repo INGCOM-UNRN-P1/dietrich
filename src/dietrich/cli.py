@@ -20,8 +20,12 @@ console = Console()
 
 def generar_seccion_markdown(report: McDcAuditReport) -> str:
     """Genera sección de auditoría de cobertura lógica MC/DC para Dredd."""
-    lines = ["## Cobertura Lógica MC/DC (Dietrich)\n"]
-    lines.append(f"- **Archivo analizado:** `{Path(report.target_file).name}`")
+    lines = [
+        "<!-- dredd-section: dietrich v1.0.0 -->\n",
+        "## Cobertura Lógica MC/DC (Dietrich)\n",
+    ]
+    target_name = Path(report.source_file).name if hasattr(report, "source_file") else getattr(report, "target_file", "source.c")
+    lines.append(f"- **Archivo analizado:** `{target_name}`")
     lines.append(f"- **Decisiones compuestas analizadas:** {report.compound_decisions_count}")
     lines.append(f"- **Cobertura MC/DC estimada:** `{report.average_mcdc_coverage}%`\n")
     if not report.decisions:
@@ -30,8 +34,9 @@ def generar_seccion_markdown(report: McDcAuditReport) -> str:
         lines.append("| Línea | Condición Compuesta | Condiciones Atómicas | Vectores Req. (k+1) |")
         lines.append("| :---: | :--- | :--- | :---: |")
         for d in report.decisions:
-            atomics_str = ", ".join(f"`{a.id}: {a.expression}`" for a in d.atomic_conditions)
-            lines.append(f"| {d.line_number} | `{d.raw_condition}` | {atomics_str} | {d.required_vectors_count} |")
+            atomics_str = ", ".join(f"`{a.id}: {a.expression.replace('|', '&#124;')}`" for a in d.atomic_conditions)
+            cond_limpia = d.raw_condition.replace("|", "&#124;")
+            lines.append(f"| {d.line_number} | `{cond_limpia}` | {atomics_str} | {d.required_vectors_count} |")
         lines.append("")
     return "\n".join(lines)
 
