@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import tree_sitter_c as tsc
 from tree_sitter import Language, Parser, Node
 
+from dietrich.core.boolean_expr import (
+    construir_expresion,
+    evaluar,
+    pares_de_independencia,
+)
 from dietrich.core.models import DecisionPoint, AtomicCondition, McDcTestCaseVector
 
 _C_LANGUAGE: Optional[Language] = None
@@ -71,6 +76,70 @@ def split_atomic_conditions(condition_str: str) -> List[str]:
     return [p.strip().strip("()") for p in parts if p not in ("&&", "||") and p.strip()]
 
 
+# Nodos que introducen una decisión lógica. `conditional_expression` cubre el
+# operador ternario `?:`, que el README declara desde el principio.
+DECISION_NODES = (
+    "if_statement",
+    "while_statement",
+    "for_statement",
+    "do_statement",
+    "conditional_expression",
+)
+
+
+def _analizar_decision(file_path: Path, node: Node, cond_node: Node) -> Optional[DecisionPoint]:
+    """Construye el punto de decisión evaluando la expresión real, no un patrón sintético."""
+    raw_cond = cond_node.text.decode("utf-8", errors="replace").strip()
+    if raw_cond.startswith("(") and raw_cond.endswith(")"):
+        raw_cond = raw_cond[1:-1].strip()
+
+    expresion, textos = construir_expresion(cond_node)
+    if expresion is None or len(textos) < 2:
+        return None
+
+    atomic_objs = [
+        AtomicCondition(id=chr(ord("A") + i), expression=texto)
+        for i, texto in enumerate(textos)
+    ]
+    pares = pares_de_independencia(expresion, len(textos))
+
+    # Un vector puede demostrar la independencia de varias condiciones a la vez;
+    # se emite una sola vez, acumulando las etiquetas que justifica.
+    vectores: Dict[Tuple[bool, ...], List[str]] = {}
+    faltantes: List[str] = []
+    for indice, par in pares.items():
+        etiqueta = atomic_objs[indice].id
+        if par is None:
+            faltantes.append(etiqueta)
+            continue
+        for combo in par:
+            vectores.setdefault(combo, []).append(etiqueta)
+
+    test_vectors: List[McDcTestCaseVector] = []
+    for v_id, (combo, etiquetas) in enumerate(sorted(vectores.items()), start=1):
+        test_vectors.append(McDcTestCaseVector(
+            vector_id=v_id,
+            assignments={atomic_objs[i].id: combo[i] for i in range(len(atomic_objs))},
+            outcome=evaluar(expresion, combo),
+            is_independence_pair_for=",".join(sorted(etiquetas)),
+        ))
+
+    cubiertas = len(atomic_objs) - len(faltantes)
+    cobertura = (cubiertas / len(atomic_objs) * 100.0) if atomic_objs else 100.0
+
+    return DecisionPoint(
+        file_path=str(file_path),
+        line_number=node.start_point.row + 1,
+        raw_condition=raw_cond,
+        atomic_conditions=atomic_objs,
+        required_vectors_count=len(test_vectors),
+        test_vectors=test_vectors,
+        covered_vectors_count=len(test_vectors),
+        mcdc_coverage_percent=round(cobertura, 2),
+        missing_independence_pairs=sorted(faltantes),
+    )
+
+
 def extract_decision_points(file_path: Path) -> List[DecisionPoint]:
     """Extrae todos los puntos de decisión con condiciones compuestas usando Tree-Sitter AST."""
     content = file_path.read_text(encoding="utf-8", errors="replace")
@@ -81,53 +150,12 @@ def extract_decision_points(file_path: Path) -> List[DecisionPoint]:
     decisions: List[DecisionPoint] = []
 
     def _traverse(node: Node) -> None:
-        if node.type in ("if_statement", "while_statement", "for_statement", "do_statement"):
+        if node.type in DECISION_NODES:
             cond_node = node.child_by_field_name("condition")
             if cond_node:
-                raw_cond = cond_node.text.decode("utf-8", errors="replace").strip()
-                if raw_cond.startswith("(") and raw_cond.endswith(")"):
-                    raw_cond = raw_cond[1:-1].strip()
-
-                atomics_raw = extract_atomics_from_ast(cond_node)
-                if len(atomics_raw) > 1:
-                    line_no = node.start_point.row + 1
-                    atomic_objs = [
-                        AtomicCondition(id=chr(ord('A') + i), expression=expr)
-                        for i, expr in enumerate(atomics_raw)
-                    ]
-
-                    k = len(atomic_objs)
-                    vectors: List[McDcTestCaseVector] = []
-                    for v_id in range(1, k + 2):
-                        assignments = {}
-                        for i, at in enumerate(atomic_objs):
-                            assignments[at.id] = (v_id == 1 or v_id == (i + 2))
-
-                        if "&&" in raw_cond and "||" not in raw_cond:
-                            outcome = all(assignments.values())
-                        elif "||" in raw_cond and "&&" not in raw_cond:
-                            outcome = any(assignments.values())
-                        else:
-                            outcome = (v_id % 2 == 1)
-
-                        indep_for = atomic_objs[v_id - 2].id if v_id >= 2 and v_id - 2 < len(atomic_objs) else None
-                        vectors.append(McDcTestCaseVector(
-                            vector_id=v_id,
-                            assignments=assignments,
-                            outcome=outcome,
-                            is_independence_pair_for=indep_for
-                        ))
-
-                    decisions.append(DecisionPoint(
-                        file_path=str(file_path),
-                        line_number=line_no,
-                        raw_condition=raw_cond,
-                        atomic_conditions=atomic_objs,
-                        required_vectors_count=len(vectors),
-                        test_vectors=vectors,
-                        covered_vectors_count=len(vectors),
-                        mcdc_coverage_percent=100.0
-                    ))
+                decision = _analizar_decision(file_path, node, cond_node)
+                if decision:
+                    decisions.append(decision)
 
         for child in node.children:
             _traverse(child)

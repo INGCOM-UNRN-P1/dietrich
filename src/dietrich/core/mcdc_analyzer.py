@@ -14,11 +14,16 @@ def audit_mcdc_coverage(source_file: Path) -> McDcAuditReport:
     total_mcdc = sum(d.mcdc_coverage_percent for d in decisions)
     avg_mcdc = (total_mcdc / compound_count) if compound_count > 0 else 100.0
 
+    # El veredicto surge de los pares de independencia realmente hallados: una
+    # decisión con condiciones enmascaradas no se puede cubrir por MC/DC y no
+    # debe darse por aprobada.
+    sin_cubrir = [d for d in decisions if d.missing_independence_pairs]
+
     return McDcAuditReport(
         source_file=str(source_file),
         total_decisions_found=compound_count,
         compound_decisions_count=compound_count,
         average_mcdc_coverage=round(avg_mcdc, 2),
         decisions=decisions,
-        passed=True
+        passed=not sin_cubrir,
     )

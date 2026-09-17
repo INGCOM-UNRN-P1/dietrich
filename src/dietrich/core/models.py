@@ -25,6 +25,9 @@ class DecisionPoint(BaseModel):
     test_vectors: List[McDcTestCaseVector] = Field(default_factory=list)
     covered_vectors_count: int = 0
     mcdc_coverage_percent: float = 100.0
+    # Condiciones sin par de independencia de causa única (enmascaradas o
+    # acopladas): es lo que el README promete como "pares faltantes".
+    missing_independence_pairs: List[str] = Field(default_factory=list)
 
 
 class McDcAuditReport(BaseModel):
