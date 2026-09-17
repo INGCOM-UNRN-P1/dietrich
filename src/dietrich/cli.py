@@ -138,6 +138,107 @@ def report_cmd(
         print(md_content)
 
 
+@app.command("doctor")
+def doctor_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Emitir diagnóstico en formato JSON estructurado."),
+):
+    """Verifica el estado del entorno de análisis MC/DC de DIETRICH."""
+    import sys
+
+    diagnostico = []
+
+    py_ok = sys.version_info >= (3, 10)
+    diagnostico.append({
+        "componente": "Python Runtime",
+        "estado": "OK" if py_ok else "ERROR",
+        "requerido": True,
+        "detalle": f"Python {sys.version.split()[0]} (requiere >= 3.10)",
+    })
+
+    try:
+        from dietrich.core.condition_extractor import get_c_parser
+        get_c_parser()
+        ts_ok, ts_detalle = True, "Parser Tree-Sitter C y gramática AST operativos"
+    except Exception as exc:
+        ts_ok, ts_detalle = False, str(exc)
+    diagnostico.append({
+        "componente": "Tree-Sitter C Parser",
+        "estado": "OK" if ts_ok else "ERROR",
+        "requerido": True,
+        "detalle": ts_detalle,
+    })
+
+    # Verificación funcional del motor: una decisión conocida debe dar sus
+    # pares de causa única. Detecta una gramática que parsea pero no permite
+    # analizar condiciones compuestas.
+    motor_ok, motor_detalle = False, "No evaluado"
+    if ts_ok:
+        try:
+            from dietrich.core.boolean_expr import (
+                MAX_CONDICIONES,
+                construir_expresion,
+                pares_de_independencia,
+            )
+            parser = get_c_parser()
+            arbol = parser.parse(b"int f(int a,int b){ if (a && b) return 1; return 0; }")
+
+            def _buscar(n):
+                if n.type == "if_statement":
+                    return n.child_by_field_name("condition")
+                for hijo in n.children:
+                    hallado = _buscar(hijo)
+                    if hallado:
+                        return hallado
+                return None
+
+            expresion, textos = construir_expresion(_buscar(arbol.root_node))
+            pares = pares_de_independencia(expresion, len(textos))
+            motor_ok = len(textos) == 2 and all(p is not None for p in pares.values())
+            motor_detalle = (
+                f"Pares de causa única operativos (tope de {MAX_CONDICIONES} condiciones por decisión)"
+                if motor_ok
+                else "El motor no pudo derivar los pares de una decisión de prueba"
+            )
+        except Exception as exc:
+            motor_detalle = str(exc)
+    diagnostico.append({
+        "componente": "Motor MC/DC",
+        "estado": "OK" if motor_ok else "ERROR",
+        "requerido": True,
+        "detalle": motor_detalle,
+    })
+
+    todo_ok = py_ok and ts_ok and motor_ok
+
+    if json_output:
+        payload = {
+            "schema_version": "1.0.0",
+            "herramienta": "dietrich",
+            "ok": todo_ok,
+            "componentes": diagnostico,
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        raise typer.Exit(code=0 if todo_ok else 1)
+
+    tabla = Table(title="🏥 Diagnóstico del Entorno DIETRICH (doctor)", border_style="cyan")
+    tabla.add_column("Componente", style="bold white")
+    tabla.add_column("Estado", justify="center")
+    tabla.add_column("Detalle")
+
+    for componente in diagnostico:
+        color = "bold green" if componente["estado"] == "OK" else "bold red"
+        simbolo = "✓" if componente["estado"] == "OK" else "✗"
+        tabla.add_row(
+            componente["componente"],
+            f"[{color}]{simbolo} {componente['estado']}[/{color}]",
+            componente["detalle"],
+        )
+
+    console.print(tabla)
+    if not todo_ok:
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def version():
     """Muestra la versión de DIETRICH."""
