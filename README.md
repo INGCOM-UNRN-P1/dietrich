@@ -7,15 +7,16 @@
 ## 🎯 Alcance
 
 ### Qué cubre
-- Medición y verificación estática y dinámica de cobertura lógica avanzada MC/DC (Modified Condition/Decision Coverage) en C.
+- Análisis **estático** (tree-sitter) de la cobertura lógica MC/DC (Modified Condition/Decision Coverage) que una decisión C admite: no ejecuta el programa ni mide qué vectores corre tu suite.
 - Identificación de puntos de decisión condicional (`if`, `while`, operadores `&&`, `||`, ternarios `?:`).
 - Demostración de pares de prueba independientes que demuestran que cada condición elemental afecta el resultado de la decisión.
-- Reporte de cobertura MC/DC con porcentaje y pares faltantes.
+- Reporte con el porcentaje de condiciones que tienen par de independencia de causa única y la lista de las que no (`missing_independence_pairs`).
 
 ### Qué no cubre (Límites y Delegación)
 - Mutation testing de mutantes sintéticos (delegado a `vassili`).
 - Generación masiva de datos aleatorios (delegado a `tyrell`).
 - Cobertura básica de líneas / bloques gcov (delegado a GCC/gcov).
+- Medición dinámica de qué vectores ejecuta una suite (no se ejecuta el binario).
 
 ---
 
@@ -25,7 +26,7 @@
 - Linux / WSL / POSIX. Python >= 3.10.
 
 ### Dependencias Externas y Binarios
-- `gcc` (para compilación instrumentada).
+- Ninguno obligatorio: el motor es estático y no compila ni ejecuta el código analizado.
 
 ### Integración en el Ecosistema
 - CLI `dietrich`. Plugin en `ripley.plugins` (`mcdc_coverage`).
@@ -38,7 +39,7 @@
 # Analizar puntos de decisión MC/DC en un archivo C
 dietrich analyze algoritmo_logica.c
 
-# Exigir porcentaje mínimo de cobertura
+# Exigir un porcentaje mínimo de condiciones con par de independencia (por defecto 100; exit 1 si no se alcanza)
 dietrich analyze algoritmo_logica.c --min-coverage 90
 
 # Salida estructurada JSON
