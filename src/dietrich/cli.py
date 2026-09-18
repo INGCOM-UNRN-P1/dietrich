@@ -45,12 +45,12 @@ def generar_seccion_markdown(report: McDcAuditReport) -> str:
 @app.command("check")
 def analyze(
     target_file: Path = typer.Argument(..., help="Archivo C a auditar por cobertura MC/DC", exists=True),
-    min_coverage: float = typer.Option(80.0, "--min-coverage", "-m", help="Porcentaje mínimo de cobertura MC/DC"),
+    min_coverage: float = typer.Option(100.0, "--min-coverage", "-m", min=0.0, max=100.0, help="Porcentaje mínimo de condiciones con par de independencia; por debajo, sale con código 1"),
     json_output: bool = typer.Option(False, "--json", help="Emitir salida en formato JSON estructurado"),
     output_md: Optional[Path] = typer.Option(None, "--md", "--output-md", help="Generar sección de reporte en formato Markdown para fusión en Dredd."),
 ):
     """Analiza condiciones booleanas compuestas (&&, ||) y calcula los vectores de prueba requeridos para MC/DC."""
-    report = audit_mcdc_coverage(target_file)
+    report = audit_mcdc_coverage(target_file, min_coverage=min_coverage)
 
     if output_md:
         md_text = generar_seccion_markdown(report)
@@ -116,10 +116,13 @@ def analyze(
 
     console.print(Panel(
         f"[bold]Decisiones Compuestas Analizadas:[/bold] {report.compound_decisions_count}\n"
-        f"[bold green]Cobertura MC/DC Estimada:[/bold green] {report.average_mcdc_coverage}%\n"
+        f"[bold green]Cobertura MC/DC Estimada:[/bold green] {report.average_mcdc_coverage}% "
+        f"(umbral exigido: {report.min_coverage_required:g}%)\n"
         f"[dim]↳ Cada condición atómica afecta de forma independiente el resultado final de la decisión.[/dim]",
         title="[bold cyan]DIETRICH MC/DC Summary[/bold cyan]"
     ))
+    if not report.passed:
+        raise typer.Exit(code=1)
 
 
 @app.command("report")

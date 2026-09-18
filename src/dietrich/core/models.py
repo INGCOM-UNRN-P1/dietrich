@@ -36,5 +36,6 @@ class McDcAuditReport(BaseModel):
     total_decisions_found: int = 0
     compound_decisions_count: int = 0
     average_mcdc_coverage: float = 100.0
+    min_coverage_required: float = 100.0
     decisions: List[DecisionPoint] = Field(default_factory=list)
     passed: bool = True
