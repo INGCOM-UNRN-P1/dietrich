@@ -31,9 +31,8 @@ class DecisionPoint(BaseModel):
 
 
 class McDcAuditReport(BaseModel):
-    schema_version: str = "1.0.0"
+    schema_version: str = "1.1.0"
     source_file: str
-    total_decisions_found: int = 0
     compound_decisions_count: int = 0
     average_mcdc_coverage: float = 100.0
     min_coverage_required: float = 100.0

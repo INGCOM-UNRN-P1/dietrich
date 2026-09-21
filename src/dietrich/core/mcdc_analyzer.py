@@ -26,7 +26,6 @@ def audit_mcdc_coverage(source_file: Path, min_coverage: float = 100.0) -> McDcA
 
     return McDcAuditReport(
         source_file=str(source_file),
-        total_decisions_found=compound_count,
         compound_decisions_count=compound_count,
         average_mcdc_coverage=round(avg_mcdc, 2),
         decisions=decisions,
