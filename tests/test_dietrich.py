@@ -3,20 +3,11 @@
 from pathlib import Path
 from typer.testing import CliRunner
 from dietrich.cli import app
-from dietrich.core.condition_extractor import split_atomic_conditions, extract_decision_points
+from dietrich.core.condition_extractor import extract_decision_points
 from dietrich.core.mcdc_analyzer import audit_mcdc_coverage
 from dietrich.plugins.ripley_plugin import DietrichPlugin
 
 runner = CliRunner()
-
-
-def test_split_atomic_conditions():
-    cond = "a > 0 && b <= 10 || c == 3"
-    atomics = split_atomic_conditions(cond)
-    assert len(atomics) == 3
-    assert "a > 0" in atomics
-    assert "b <= 10" in atomics
-    assert "c == 3" in atomics
 
 
 def test_extract_decision_points_mcdc(tmp_path):

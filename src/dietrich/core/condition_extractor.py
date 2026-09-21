@@ -27,55 +27,6 @@ def get_c_parser() -> Parser:
     return _PARSER
 
 
-def extract_atomics_from_ast(node: Node) -> List[str]:
-    """Extrae las expresiones atómicas recorriendo el subárbol de expresiones binarias."""
-    if node.type == "parenthesized_expression":
-        # Desempaquetar el contenido interno entre paréntesis
-        if len(node.children) >= 3:
-            return extract_atomics_from_ast(node.children[1])
-        elif len(node.children) == 1:
-            return extract_atomics_from_ast(node.children[0])
-
-    if node.type == "binary_expression":
-        op_node = node.child_by_field_name("operator")
-        if op_node:
-            op_text = op_node.text.decode("utf-8", errors="replace")
-            if op_text in ("&&", "||"):
-                left_node = node.child_by_field_name("left")
-                right_node = node.child_by_field_name("right")
-                left_parts = extract_atomics_from_ast(left_node) if left_node else []
-                right_parts = extract_atomics_from_ast(right_node) if right_node else []
-                return left_parts + right_parts
-
-    text = node.text.decode("utf-8", errors="replace").strip()
-    return [text] if text else []
-
-
-def split_atomic_conditions(condition_str: str) -> List[str]:
-    """Divide una condición booleana compuesta en sus condiciones atómicas usando Tree-Sitter."""
-    parser = get_c_parser()
-    snippet = f"void _dummy() {{ if ({condition_str}) {{}} }}".encode("utf-8")
-    tree = parser.parse(snippet)
-
-    def _find_if_cond(n: Node) -> Optional[Node]:
-        if n.type == "if_statement":
-            return n.child_by_field_name("condition")
-        for child in n.children:
-            res = _find_if_cond(child)
-            if res:
-                return res
-        return None
-
-    cond_node = _find_if_cond(tree.root_node)
-    if cond_node:
-        return extract_atomics_from_ast(cond_node)
-
-    # Fallback básico
-    import re
-    parts = re.split(r'\s*(&&|\|\|)\s*', condition_str.strip())
-    return [p.strip().strip("()") for p in parts if p not in ("&&", "||") and p.strip()]
-
-
 # Nodos que introducen una decisión lógica. `conditional_expression` cubre el
 # operador ternario `?:`, que el README declara desde el principio.
 DECISION_NODES = (
