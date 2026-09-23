@@ -20,8 +20,9 @@ console = Console()
 
 def generar_seccion_markdown(report: McDcAuditReport) -> str:
     """Genera sección de auditoría de cobertura lógica MC/DC para Dredd."""
+    status = "ok" if report.passed else "fail"
     lines = [
-        "<!-- dredd-section: dietrich v1.0.0 -->\n",
+        f"<!-- dredd-section: dietrich, tool=dietrich, version=1.0.0, status={status} -->\n",
         "## Cobertura Lógica MC/DC (Dietrich)\n",
     ]
     target_name = Path(report.source_file).name if hasattr(report, "source_file") else getattr(report, "target_file", "source.c")
