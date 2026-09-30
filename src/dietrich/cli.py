@@ -4,41 +4,24 @@ import json
 from pathlib import Path
 from typing import Optional
 import typer
+from yutani.cli import crear_app
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from dietrich import __version__
 from dietrich.core.models import McDcAuditReport
 from dietrich.core.mcdc_analyzer import audit_mcdc_coverage
 
-app = typer.Typer(
-    context_settings={"help_option_names": ["-h", "--help"]},
-    name="dietrich",
-    help="Validador de cobertura lógica avanzada MC/DC (Modified Condition/Decision Coverage) en C",
-    add_completion=True
+# Contrato de línea de comandos del ecosistema (-h/--help, --version/-v, errores de datos como
+# mensajes) y textos de Typer en español, desde yutani (N-ECO-14).
+app = crear_app(
+    "dietrich",
+    __version__,
+    "Validador de cobertura lógica avanzada MC/DC (Modified Condition/Decision Coverage) en C",
+    add_completion=True,
+    no_args_is_help=False,
 )
 console = Console()
-
-
-def _mostrar_version(valor: bool) -> None:
-    if valor:
-        from dietrich import __version__
-
-        console.print(f"dietrich {__version__}")
-        raise typer.Exit(code=0)
-
-
-@app.callback()
-def _principal(
-    version: bool = typer.Option(
-        False,
-        "--version",
-        "-v",
-        help="Muestra la versión de dietrich y termina.",
-        callback=_mostrar_version,
-        is_eager=True,
-    ),
-) -> None:
-    """Validador de cobertura lógica avanzada MC/DC (Modified Condition/Decision Coverage) en C"""
 
 
 def generar_seccion_markdown(report: McDcAuditReport) -> str:
