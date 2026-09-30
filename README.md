@@ -55,3 +55,32 @@ dietrich analyze algoritmo_logica.c --json
 Para una decisión lógica con $k$ condiciones atómicas:
 - Una tabla de verdad exhaustiva requiere $2^k$ combinaciones.
 - **MC/DC** reduce la suite a $k + 1$ vectores de prueba demostrando que cada condición atómica altera de forma independiente el resultado final de la decisión manteniendo las demás constantes.
+
+<!-- p1:referencia:inicio — generado por p1-tools/scripts/readme_generado.py: no editar a mano -->
+
+## Referencia rápida
+
+### Requisitos
+
+- Python ≥ 3.11 y [uv](https://docs.astral.sh/uv/getting-started/installation/).
+- Programas del sistema: `gcc`.
+
+| Sistema | `gcc` |
+|:--|:--|
+| Debian / Ubuntu | `sudo apt install gcc` |
+| Fedora | `sudo dnf install gcc` |
+| Windows | incluido en el entorno de la cátedra (MSYS2 UCRT64) |
+| macOS | `xcode-select --install` (clang como `gcc`) |
+
+### Comandos
+
+| Comando | Descripción |
+|:--|:--|
+| `dietrich check`, `dietrich analyze` | Analiza condiciones booleanas compuestas (&&, \|\|) y calcula los vectores de prueba requeridos para MC/DC. |
+| `dietrich report` | Genera directamente la sección de reporte Markdown de DIETRICH para Dredd. |
+| `dietrich doctor` | Verifica el estado del entorno de análisis MC/DC de DIETRICH. |
+| `dietrich version` | Muestra la versión de DIETRICH. |
+
+Ayuda de cada comando: `dietrich <comando> -h`.
+
+<!-- p1:referencia:fin -->
