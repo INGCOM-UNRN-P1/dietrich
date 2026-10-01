@@ -13,12 +13,13 @@
 - Identificación de puntos de decisión condicional (`if`, `while`, operadores `&&`, `||`, ternarios `?:`).
 - Demostración de pares de prueba independientes que demuestran que cada condición elemental afecta el resultado de la decisión.
 - Reporte con el porcentaje de condiciones que tienen par de independencia de causa única y la lista de las que no (`missing_independence_pairs`).
+- Cobertura **medida** de líneas, ramas y condiciones (`dietrich lines`, con gcc y gcov): el paso previo a MC/DC. Compila con `--coverage`, ejecuta tus pruebas y dice qué líneas no ejecutó ninguna, qué decisiones tomaron un solo camino, qué condición nunca fue verdadera o falsa (gcc 14 o posterior) y qué funciones nunca se llamaron.
 
 ### Qué no cubre (Límites y Delegación)
 - Mutation testing de mutantes sintéticos (delegado a `vassili`).
 - Generación masiva de datos aleatorios (delegado a `tyrell`).
-- Cobertura básica de líneas / bloques gcov (delegado a GCC/gcov).
-- Medición dinámica de qué vectores ejecuta una suite (no se ejecuta el binario).
+- Medir MC/DC de causa única sobre la ejecución: `dietrich check` es estático y `dietrich lines` mide el MC/DC con enmascaramiento de gcc (`-fcondition-coverage`), que es menos estricto.
+- Juzgar si los resultados son correctos: la cobertura dice qué se ejecutó; las aserciones de las pruebas dicen si está bien.
 
 ---
 
@@ -28,7 +29,8 @@
 - Linux / WSL / POSIX. Python >= 3.10.
 
 ### Dependencias Externas y Binarios
-- Ninguno obligatorio: el motor es estático y no compila ni ejecuta el código analizado.
+- `check`/`analyze`/`report`: ninguno; el motor es estático y no compila ni ejecuta el código analizado.
+- `lines`: `gcc` y su `gcov` (gcc 10 o posterior; con gcc 14 o posterior también mide condiciones). En macOS, el gcc de Homebrew: `--gcc gcc-14 --gcov gcov-14`.
 
 ### Integración en el Ecosistema
 - CLI `dietrich`. Plugin en `ripley.plugins` (`mcdc_coverage`).
@@ -46,6 +48,9 @@ dietrich analyze algoritmo_logica.c --min-coverage 90
 
 # Salida estructurada JSON
 dietrich analyze algoritmo_logica.c --json
+
+# Cobertura medida de tus pruebas: compila lista.c con test_lista.c, ejecuta y reporta lista.c
+dietrich lines lista.c test_lista.c
 ```
 
 ---
@@ -77,6 +82,7 @@ Para una decisión lógica con $k$ condiciones atómicas:
 | Comando | Descripción |
 |:--|:--|
 | `dietrich check`, `dietrich analyze` | Analiza condiciones booleanas compuestas (&&, \|\|) y calcula los vectores de prueba requeridos para MC/DC. |
+| `dietrich lines` | Mide qué líneas, ramas y condiciones ejecutan tus pruebas (gcc + gcov): el paso previo a MC/DC. |
 | `dietrich report` | Genera directamente la sección de reporte Markdown de DIETRICH para Dredd. |
 | `dietrich doctor` | Verifica el estado del entorno de análisis MC/DC de DIETRICH. |
 | `dietrich version` | Muestra la versión de DIETRICH. |

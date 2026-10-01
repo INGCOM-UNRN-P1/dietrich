@@ -14,12 +14,13 @@
 - Identificación de puntos de decisión condicional (`if`, `while`, operadores `&&`, `||`, ternarios `?:`).
 - Demostración de pares de prueba independientes que demuestran que cada condición elemental afecta el resultado de la decisión.
 - Reporte con el porcentaje de condiciones que tienen par de independencia de causa única y la lista de las que no (`missing_independence_pairs`).
+- Cobertura **medida** de líneas, ramas y condiciones (`dietrich lines`, con gcc y gcov): el paso previo a MC/DC. Compila con `--coverage`, ejecuta tus pruebas y dice qué líneas no ejecutó ninguna, qué decisiones tomaron un solo camino, qué condición nunca fue verdadera o falsa (gcc 14 o posterior) y qué funciones nunca se llamaron.
 
 ### Límites de Responsabilidad y Delegación (Qué no cubre)
 - Mutation testing de mutantes sintéticos (delegado a `vassili`).
 - Generación masiva de datos aleatorios (delegado a `tyrell`).
-- Cobertura básica de líneas / bloques gcov (delegado a GCC/gcov).
-- Medición dinámica de qué vectores ejecuta una suite (no se ejecuta el binario).
+- Medir MC/DC de causa única sobre la ejecución: `dietrich check` es estático y `dietrich lines` mide el MC/DC con enmascaramiento de gcc (`-fcondition-coverage`), que es menos estricto.
+- Juzgar si los resultados son correctos: la cobertura dice qué se ejecutó; las aserciones de las pruebas dicen si está bien.
 
 ### Principios de Diseño
 - **Enfoque Pedagógico:** Diagnósticos y mensajes en español rioplatense orientados a facilitar la comprensión de errores conceptuales.
@@ -56,6 +57,7 @@ dietrich doctor
 | :--- | :--- |
 | [`dietrich check`](#check) | Analiza condiciones booleanas compuestas (&&, ||) y calcula los vectores de prueba requeridos para MC/DC. |
 | [`dietrich analyze`](#analyze) | Analiza condiciones booleanas compuestas (&&, ||) y calcula los vectores de prueba requeridos para MC/DC. |
+| [`dietrich lines`](#lines) | Mide qué líneas, ramas y condiciones ejecutan tus pruebas (gcc + gcov): el paso previo a MC/DC. |
 | [`dietrich report`](#report) | Genera directamente la sección de reporte Markdown de DIETRICH para Dredd. |
 | [`dietrich doctor`](#doctor) | Verifica el estado del entorno de análisis MC/DC de DIETRICH. |
 | [`dietrich version`](#version) | Muestra la versión de DIETRICH. |
@@ -100,6 +102,53 @@ Analiza condiciones booleanas compuestas (&&, ||) y calcula los vectores de prue
 #### Ejemplo de Invocación
 ```bash
 dietrich analyze <target_file>
+```
+
+### `dietrich lines`
+
+Mide la cobertura **real** de tus pruebas, el paso previo a MC/DC: compila las fuentes con `--coverage`
+(`-O0 -g`), ejecuta el programa y lee los datos de `gcov`. Informa, en términos de la clase:
+
+- las **líneas** que ninguna prueba ejecutó (con el código, en bloques);
+- las **decisiones que tomaron un solo camino** (un `if` que nunca fue falso, un bucle que nunca se
+  salteó): gcc cuenta dos ramas por condición, así que `if (a || b)` tiene cuatro;
+- con gcc 14 o posterior, las **condiciones** que nunca decidieron el resultado siendo verdaderas o
+  falsas (`v == NULL nunca fue verdadera`), medidas con `-fcondition-coverage`;
+- las **funciones** que ninguna prueba llamó.
+
+Las fuentes se compilan juntas en un programa: el código y el programa de prueba (el que tiene `main`).
+Se mide por defecto el código probado, es decir, las fuentes **sin** `main` (o todas, si todas lo
+tienen); `--only` lo cambia. Cada `--input` es una ejecución con ese archivo como entrada estándar, y la
+cobertura de todas se suma. Un `assert` que falla (SIGABRT), un segmentation fault o una ejecución que
+supera `--timeout` no pierden los datos: dietrich los vuelca antes de que el programa termine y avisa
+qué ejecución falló.
+
+#### Argumentos
+| Argumento | Descripción |
+| :--- | :--- |
+| `fuentes` | Fuentes C a compilar juntas: el código y el programa de prueba (con `main`). |
+
+#### Opciones y Banderas
+| Opción | Por defecto | Descripción |
+| :--- | :--- | :--- |
+| `--input`, `-i` | — | Archivo para la entrada estándar; se repite (una ejecución por archivo). |
+| `--only` | fuentes sin `main` | Fuente a medir; se repite. |
+| `--cflags` | — | Banderas extra para gcc, por ejemplo `'-std=c11 -Wall'`. |
+| `--timeout` | `10` | Segundos por ejecución. |
+| `--min-lines` | `0` | Porcentaje mínimo de líneas ejecutadas; por debajo, sale con 1. |
+| `--min-branches` | `0` | Porcentaje mínimo de ramas tomadas; por debajo, sale con 1. |
+| `--gcc`, `--gcov` | `gcc`, `gcov` | Compilador y su gcov (en macOS, `gcc-14` y `gcov-14` de Homebrew). |
+| `--json` | — | Salida JSON (`schema_version`, `archivos`, `ejecuciones`, porcentajes). |
+| `--md`, `--output-md` | — | Sección de reporte Markdown para Dredd. |
+
+Códigos de salida: 0 si se alcanzan los mínimos, 1 si no, 2 si no se pudo medir (falta gcc o gcov, las
+fuentes no compilan).
+
+#### Ejemplo de Invocación
+```bash
+dietrich lines lista.c test_lista.c
+dietrich lines calculadora.c -i casos/suma.txt -i casos/division_por_cero.txt --min-lines 80
+dietrich lines lista.c test_lista.c --json
 ```
 
 ### `dietrich report`

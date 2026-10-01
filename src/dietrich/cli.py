@@ -2,15 +2,17 @@
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 import typer
 from yutani.cli import crear_app
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from dietrich import __version__
 from dietrich.core.models import McDcAuditReport
 from dietrich.core.mcdc_analyzer import audit_mcdc_coverage
+from dietrich.core.lineas import ErrorDeCobertura, ReporteLineas, bloques, medir_cobertura
 
 # Contrato de línea de comandos del ecosistema (-h/--help, --version/-v, errores de datos como
 # mensajes) y textos de Typer en español, desde yutani (N-ECO-14).
@@ -22,6 +24,7 @@ app = crear_app(
     no_args_is_help=False,
 )
 console = Console()
+console_err = Console(stderr=True)
 
 
 def generar_seccion_markdown(report: McDcAuditReport) -> str:
@@ -130,6 +133,141 @@ def analyze(
     ))
     if not report.passed:
         raise typer.Exit(code=1)
+
+
+def generar_seccion_lineas(reporte: ReporteLineas) -> str:
+    """Sección de cobertura de líneas y ramas para el reporte de Dredd."""
+    estado = "ok" if reporte.aprobado else "fail"
+    partes = [
+        f"<!-- dredd-section: dietrich-lines, tool=dietrich, version=1.0.0, status={estado} -->\n",
+        "## Cobertura de líneas y ramas (Dietrich)\n",
+        f"- **Líneas ejecutadas:** {reporte.porcentaje_lineas:g} %",
+        f"- **Ramas tomadas:** {_pct(reporte.porcentaje_ramas)}",
+    ]
+    if reporte.porcentaje_condiciones is not None:
+        partes.append(f"- **Condiciones cubiertas:** {_pct(reporte.porcentaje_condiciones)}")
+    partes.append("")
+    for archivo in reporte.archivos:
+        nombre = Path(archivo.archivo).name
+        en_funciones = {n for f in archivo.funciones_sin_llamar for n in range(f.linea, f.linea_fin + 1)}
+        codigo = Path(archivo.archivo).read_text(encoding="utf-8", errors="replace").splitlines()
+        for inicio, fin in bloques([n for n in archivo.lineas_sin_ejecutar if n not in en_funciones], codigo):
+            rango = f"{inicio}" if inicio == fin else f"{inicio}–{fin}"
+            partes.append(f"- `{nombre}:{rango}`: ninguna prueba ejecutó estas líneas.")
+        for rama in archivo.ramas_pendientes:
+            partes.append(f"- `{nombre}:{rama.linea}`: la decisión tomó {rama.tomadas} de sus {rama.total} caminos.")
+        for f in archivo.funciones_sin_llamar:
+            partes.append(f"- `{nombre}:{f.linea}`: la función `{f.nombre}` nunca se llamó.")
+    partes.append("")
+    return "\n".join(partes)
+
+
+def _pct(valor: Optional[float]) -> str:
+    return "sin decisiones" if valor is None else f"{valor:g} %"
+
+
+@app.command("lines")
+def lines_cmd(
+    fuentes: List[Path] = typer.Argument(..., help="Fuentes C a compilar juntas: el código y el programa de prueba (con main).", exists=True, dir_okay=False),
+    entrada: List[Path] = typer.Option([], "--input", "-i", help="Archivo para la entrada estándar; se repite para varias ejecuciones (una por archivo).", exists=True, dir_okay=False),
+    solo: List[Path] = typer.Option([], "--only", help="Fuente a medir (se repite). Por defecto, las que no tienen main.", exists=True, dir_okay=False),
+    cflags: str = typer.Option("", "--cflags", help="Banderas extra para gcc, por ejemplo '-std=c11 -Wall'."),
+    timeout: float = typer.Option(10.0, "--timeout", min=0.1, help="Segundos por ejecución; al cortarla se guarda lo ejecutado hasta ahí."),
+    min_lineas: float = typer.Option(0.0, "--min-lines", min=0.0, max=100.0, help="Porcentaje mínimo de líneas ejecutadas; por debajo, sale con 1."),
+    min_ramas: float = typer.Option(0.0, "--min-branches", min=0.0, max=100.0, help="Porcentaje mínimo de ramas tomadas; por debajo, sale con 1."),
+    gcc: str = typer.Option("gcc", "--gcc", help="Compilador (gcc-14 en macOS con Homebrew)."),
+    gcov: str = typer.Option("gcov", "--gcov", help="gcov de la misma versión que el compilador."),
+    json_output: bool = typer.Option(False, "--json", help="Emitir salida en formato JSON estructurado"),
+    output_md: Optional[Path] = typer.Option(None, "--md", "--output-md", help="Generar sección de reporte en formato Markdown para fusión en Dredd."),
+):
+    """Mide qué líneas, ramas y condiciones ejecutan tus pruebas (gcc + gcov): el paso previo a MC/DC."""
+    import shlex
+
+    try:
+        reporte = medir_cobertura(fuentes, entrada, solo, shlex.split(cflags), timeout, min_lineas, min_ramas,
+                                  gcc=gcc, gcov=gcov)
+    except ErrorDeCobertura as exc:
+        console_err.print(f"[bold red]Error:[/bold red] {exc}")
+        raise typer.Exit(code=2)
+    codigo = 0 if reporte.aprobado else 1
+
+    if output_md:
+        output_md.parent.mkdir(parents=True, exist_ok=True)
+        output_md.write_text(generar_seccion_lineas(reporte), encoding="utf-8")
+        console.print(f"[bold green]✓ Sección Markdown generada en:[/bold green] {output_md}")
+        raise typer.Exit(code=codigo)
+    if json_output:
+        print(json.dumps(reporte.model_dump(), indent=2, ensure_ascii=False))
+        raise typer.Exit(code=codigo)
+
+    for ejecucion in reporte.ejecuciones:
+        origen = f"con la entrada {Path(ejecucion.entrada).name}" if ejecucion.entrada else "sin entrada"
+        if ejecucion.agoto_tiempo:
+            console.print(f"[yellow]⚠ La ejecución {origen} superó {timeout:g} s y se cortó: ¿un bucle que no "
+                          "termina? Se cuenta lo ejecutado hasta el corte.[/yellow]")
+        elif ejecucion.senal:
+            console.print(f"[yellow]⚠ La ejecución {origen} terminó por {ejecucion.senal} (un assert que falla "
+                          "da SIGABRT): revisá esa prueba; se cuenta lo ejecutado hasta la falla.[/yellow]")
+        elif ejecucion.codigo_salida:
+            console.print(f"[dim]La ejecución {origen} terminó con código {ejecucion.codigo_salida}.[/dim]")
+
+    tabla = Table(title="Cobertura de líneas y ramas (gcov)", header_style="bold magenta")
+    tabla.add_column("Archivo", style="cyan")
+    tabla.add_column("Líneas", justify="right")
+    tabla.add_column("Ramas", justify="right")
+    if reporte.porcentaje_condiciones is not None:
+        tabla.add_column("Condiciones", justify="right")
+    for a in reporte.archivos:
+        fila = [Path(a.archivo).name, f"{a.lineas_ejecutadas}/{a.lineas_totales}",
+                f"{a.ramas_tomadas}/{a.ramas_totales}" if a.ramas_totales else "—"]
+        if reporte.porcentaje_condiciones is not None:
+            fila.append(f"{a.condiciones_cubiertas}/{a.condiciones_totales}" if a.condiciones_totales else "—")
+        tabla.add_row(*fila)
+    console.print(tabla)
+
+    for a in reporte.archivos:
+        nombre = Path(a.archivo).name
+        codigo_fuente = Path(a.archivo).read_text(encoding="utf-8", errors="replace").splitlines()
+        # Las líneas de una función que nunca se llamó se informan con la función, no una por una.
+        en_funciones = {n for f in a.funciones_sin_llamar for n in range(f.linea, f.linea_fin + 1)}
+        sueltas = [n for n in a.lineas_sin_ejecutar if n not in en_funciones]
+        if sueltas:
+            console.print(f"\n[bold]{nombre}: líneas que ninguna prueba ejecutó[/bold]")
+            for inicio, fin in bloques(sueltas, codigo_fuente):
+                for n in range(inicio, fin + 1):
+                    texto = codigo_fuente[n - 1] if n <= len(codigo_fuente) else ""
+                    marca = "[red]✗[/red]" if n in a.lineas_sin_ejecutar else " "
+                    console.print(f"[red]{n:>5}[/red] {marca} │ {escape(texto)}")
+                console.print("      ┄")
+        if a.ramas_pendientes:
+            console.print(f"\n[bold]{nombre}: decisiones que tomaron un solo camino[/bold]")
+            for r in a.ramas_pendientes:
+                console.print(f"[yellow]{r.linea:>5}[/yellow] │ {escape(r.codigo)}  "
+                              f"[dim]({r.tomadas} de {r.total} ramas)[/dim]")
+        if a.condiciones_pendientes:
+            console.print(f"\n[bold]{nombre}: condiciones que nunca decidieron el resultado[/bold]")
+            for c in a.condiciones_pendientes:
+                console.print(f"[yellow]{c.linea:>5}[/yellow] │ [cyan]{escape(c.condicion)}[/cyan] nunca fue "
+                              f"{c.nunca_fue}: agregá una prueba en la que lo sea.")
+        if a.funciones_sin_llamar:
+            console.print(f"\n[bold]{nombre}: funciones que ninguna prueba llamó[/bold]")
+            for f in a.funciones_sin_llamar:
+                console.print(f"[red]{f.linea:>5}[/red] │ [bold]{escape(f.nombre)}[/bold] "
+                              f"[dim](líneas {f.linea}–{f.linea_fin})[/dim]")
+
+    resumen = [f"[bold]Líneas ejecutadas:[/bold] {reporte.porcentaje_lineas:g} %"
+               + (f" (mínimo {min_lineas:g} %)" if min_lineas else ""),
+               f"[bold]Ramas tomadas:[/bold] {_pct(reporte.porcentaje_ramas)}"
+               + (f" (mínimo {min_ramas:g} %)" if min_ramas else "")]
+    if reporte.porcentaje_condiciones is not None:
+        resumen.append(f"[bold]Condiciones cubiertas:[/bold] {_pct(reporte.porcentaje_condiciones)}")
+    else:
+        resumen.append(f"[dim]gcc {reporte.gcc} no mide condiciones (hace falta gcc 14 o posterior).[/dim]")
+    resumen.append("[dim]↳ La cobertura dice qué se ejecutó, no si el resultado es correcto: eso lo dicen las "
+                   "aserciones. El paso siguiente es MC/DC: dietrich check.[/dim]")
+    console.print(Panel("\n".join(resumen), title="[bold cyan]DIETRICH lines[/bold cyan]",
+                        border_style="green" if reporte.aprobado else "red"))
+    raise typer.Exit(code=codigo)
 
 
 @app.command("report")
