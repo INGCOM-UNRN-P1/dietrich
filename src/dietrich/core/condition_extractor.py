@@ -9,11 +9,17 @@ import tree_sitter_c as tsc
 from tree_sitter import Language, Parser, Node
 
 from dietrich.core.boolean_expr import (
+    condiciones_evaluadas,
     construir_expresion,
     evaluar,
-    pares_de_independencia,
+    seleccion_minima,
+    todos_los_pares,
 )
+
 from dietrich.core.models import DecisionPoint, AtomicCondition, McDcTestCaseVector
+
+# Más condiciones que esto en una sola decisión es difícil de leer y de probar (QoL #250).
+MAX_CONDICIONES_LEGIBLES = 4
 
 _C_LANGUAGE: Optional[Language] = None
 _PARSER: Optional[Parser] = None
@@ -52,7 +58,7 @@ def _analizar_decision(file_path: Path, node: Node, cond_node: Node) -> Optional
         AtomicCondition(id=chr(ord("A") + i), expression=texto)
         for i, texto in enumerate(textos)
     ]
-    pares = pares_de_independencia(expresion, len(textos))
+    pares = seleccion_minima(todos_los_pares(expresion, len(textos)))
 
     # Un vector puede demostrar la independencia de varias condiciones a la vez;
     # se emite una sola vez, acumulando las etiquetas que justifica.
@@ -73,6 +79,7 @@ def _analizar_decision(file_path: Path, node: Node, cond_node: Node) -> Optional
             assignments={atomic_objs[i].id: combo[i] for i in range(len(atomic_objs))},
             outcome=evaluar(expresion, combo),
             is_independence_pair_for=",".join(sorted(etiquetas)),
+            not_evaluated=[a.id for i, a in enumerate(atomic_objs) if i not in condiciones_evaluadas(expresion, combo)],
         ))
 
     cubiertas = len(atomic_objs) - len(faltantes)
@@ -88,6 +95,13 @@ def _analizar_decision(file_path: Path, node: Node, cond_node: Node) -> Optional
         covered_vectors_count=len(test_vectors),
         mcdc_coverage_percent=round(cobertura, 2),
         missing_independence_pairs=sorted(faltantes),
+        minimum_vectors=len(atomic_objs) + 1,
+        warning=(
+            f"La decisión combina {len(atomic_objs)} condiciones: es difícil de leer y de probar (MC/DC pide al "
+            f"menos {len(atomic_objs) + 1} casos). Extraé parte en una función con nombre (por ejemplo "
+            "`es_valido(...)`) o en variables booleanas intermedias."
+            if len(atomic_objs) > MAX_CONDICIONES_LEGIBLES else None
+        ),
     )
 
 

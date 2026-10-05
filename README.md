@@ -61,6 +61,15 @@ Para una decisión lógica con $k$ condiciones atómicas:
 - Una tabla de verdad exhaustiva requiere $2^k$ combinaciones.
 - **MC/DC** reduce la suite a $k + 1$ vectores de prueba demostrando que cada condición atómica altera de forma independiente el resultado final de la decisión manteniendo las demás constantes.
 
+Lo que informa `dietrich check` de cada decisión:
+
+- los vectores elegidos reusando los de otras condiciones, y la cota mínima teórica
+  (`minimum_vectors`, $k + 1$): en las cadenas de `&&` y de `||` se alcanza;
+- en cada vector, las condiciones que C **no evalúa** por el cortocircuito (`not_evaluated`, y `—`
+  en la tabla): con `a > 0 && b > 0`, si `a > 0` es falsa, `b > 0` no se evalúa y su valor no importa;
+- un aviso (`warning`) cuando la decisión combina más de 4 condiciones: conviene extraer parte en
+  una función con nombre o en variables booleanas intermedias.
+
 <!-- p1:referencia:inicio — generado por p1-tools/scripts/readme_generado.py: no editar a mano -->
 
 ## Referencia rápida

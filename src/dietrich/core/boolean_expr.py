@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from tree_sitter import Node
 
@@ -126,3 +126,52 @@ def pares_de_independencia(
                 break
         pares[i] = encontrado
     return pares
+
+
+def condiciones_evaluadas(expr: Expr, valores: Sequence[bool]) -> Set[int]:
+    """Las condiciones que C llega a evaluar con estos valores (QoL #245): con `A && B`, si A es
+    falsa, B no se evalúa; con `A || B`, si A es verdadera, tampoco."""
+    if isinstance(expr, Atomo):
+        return {expr.indice}
+    izquierda = condiciones_evaluadas(expr.izquierda, valores)
+    valor_izq = evaluar(expr.izquierda, valores)
+    corta = (not valor_izq) if isinstance(expr, Conjuncion) else valor_izq
+    return izquierda if corta else izquierda | condiciones_evaluadas(expr.derecha, valores)
+
+
+Par = Tuple[Tuple[bool, ...], Tuple[bool, ...]]
+
+
+def todos_los_pares(expr: Expr, cantidad: int) -> Dict[int, List[Par]]:
+    """Todos los pares de causa única de cada condición."""
+    if cantidad > MAX_CONDICIONES:
+        return {i: [] for i in range(cantidad)}
+    combinaciones = list(product([False, True], repeat=cantidad))
+    resultados = {c: evaluar(expr, c) for c in combinaciones}
+    pares: Dict[int, List[Par]] = {}
+    for i in range(cantidad):
+        pares[i] = []
+        for combo in combinaciones:
+            if combo[i]:
+                continue
+            alterno = combo[:i] + (True,) + combo[i + 1:]
+            if resultados[combo] != resultados[alterno]:
+                pares[i].append((combo, alterno))
+    return pares
+
+
+def seleccion_minima(pares: Dict[int, List[Par]]) -> Dict[int, Optional[Par]]:
+    """Un par por condición reusando vectores (QoL #247): de los pares de cada condición se elige
+    el que suma menos vectores nuevos. Para las cadenas de `&&` y `||` llega al mínimo teórico,
+    N + 1 vectores para N condiciones."""
+    elegidos: Dict[int, Optional[Par]] = {}
+    vectores: Set[Tuple[bool, ...]] = set()
+    # Primero las condiciones con menos opciones: son las que restringen la elección.
+    for i in sorted(pares, key=lambda k: (len(pares[k]), k)):
+        if not pares[i]:
+            elegidos[i] = None
+            continue
+        par = min(pares[i], key=lambda p: (sum(v not in vectores for v in p), p))
+        elegidos[i] = par
+        vectores.update(par)
+    return dict(sorted(elegidos.items()))

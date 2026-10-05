@@ -96,7 +96,7 @@ def analyze(
             str(d.line_number),
             d.raw_condition,
             atomics_str,
-            f"{d.required_vectors_count} vectores (k+1)"
+            f"{d.required_vectors_count} vectores (mínimo teórico N+1 = {d.minimum_vectors})"
         )
 
     console.print(table)
@@ -115,7 +115,10 @@ def analyze(
             row = [str(v.vector_id)]
             for at in first_d.atomic_conditions:
                 val = v.assignments.get(at.id, False)
-                val_str = "[green]T[/green]" if val else "[red]F[/red]"
+                if at.id in v.not_evaluated:
+                    val_str = "[dim]—[/dim]"  # no se evalúa por el cortocircuito: su valor no importa
+                else:
+                    val_str = "[green]T[/green]" if val else "[red]F[/red]"
                 row.append(val_str)
             res_str = "[bold green]TRUE[/bold green]" if v.outcome else "[bold red]FALSE[/bold red]"
             row.append(res_str)
@@ -123,6 +126,11 @@ def analyze(
             v_table.add_row(*row)
 
         console.print(v_table)
+        console.print("[dim]— : C no evalúa esa condición en ese caso (cortocircuito de && y ||): su valor no importa.[/dim]")
+
+    for d in report.decisions:
+        if d.warning:
+            console.print(f"[yellow]⚠ Línea {d.line_number}:[/yellow] {d.warning}")
 
     console.print(Panel(
         f"[bold]Decisiones Compuestas Analizadas:[/bold] {report.compound_decisions_count}\n"
