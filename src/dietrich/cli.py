@@ -196,7 +196,7 @@ def lines_cmd(
                                   gcc=gcc, gcov=gcov)
     except ErrorDeCobertura as exc:
         console_err.print(f"[bold red]Error:[/bold red] {exc}")
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from exc
     codigo = 0 if reporte.aprobado else 1
 
     if output_md:
