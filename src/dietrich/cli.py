@@ -348,6 +348,8 @@ def doctor_cmd(
                 return None
 
             expresion, textos = construir_expresion(_buscar(arbol.root_node))
+            if expresion is None:
+                raise ValueError("no se pudo construir la expresión de la decisión de prueba")
             pares = pares_de_independencia(expresion, len(textos))
             motor_ok = len(textos) == 2 and all(p is not None for p in pares.values())
             motor_detalle = (
@@ -385,9 +387,9 @@ def doctor_cmd(
         color = "bold green" if componente["estado"] == "OK" else "bold red"
         simbolo = "✓" if componente["estado"] == "OK" else "✗"
         tabla.add_row(
-            componente["componente"],
+            str(componente["componente"]),
             f"[{color}]{simbolo} {componente['estado']}[/{color}]",
-            componente["detalle"],
+            str(componente["detalle"]),
         )
 
     console.print(tabla)

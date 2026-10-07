@@ -69,7 +69,7 @@ def construir_expresion(node: Node) -> Tuple[Optional[Expr], List[str]]:
 
         if n.type == "binary_expression":
             op_node = n.child_by_field_name("operator")
-            operador = op_node.text.decode("utf-8", errors="replace") if op_node else ""
+            operador = (op_node.text or b"").decode("utf-8", errors="replace") if op_node else ""
             if operador in ("&&", "||"):
                 izq_node = n.child_by_field_name("left")
                 der_node = n.child_by_field_name("right")
@@ -79,7 +79,7 @@ def construir_expresion(node: Node) -> Tuple[Optional[Expr], List[str]]:
                     return izq or der
                 return Conjuncion(izq, der) if operador == "&&" else Disyuncion(izq, der)
 
-        texto = n.text.decode("utf-8", errors="replace").strip()
+        texto = (n.text or b"").decode("utf-8", errors="replace").strip()
         if not texto:
             return None
         return Atomo(_indice_de(texto))

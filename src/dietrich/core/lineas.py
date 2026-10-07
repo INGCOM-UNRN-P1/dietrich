@@ -132,7 +132,8 @@ def _ejecutable(directorio: Path) -> Path:
 
 
 def _correr(programa: Path, entrada: Optional[Path], timeout: float) -> Ejecucion:
-    stdin = open(entrada, "rb") if entrada else subprocess.DEVNULL
+    archivo_entrada = open(entrada, "rb") if entrada else None
+    stdin = archivo_entrada if archivo_entrada else subprocess.DEVNULL
     try:
         proceso = subprocess.Popen([str(programa)], stdin=stdin, stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL)
@@ -149,8 +150,8 @@ def _correr(programa: Path, entrada: Optional[Path], timeout: float) -> Ejecucio
                 codigo = proceso.wait()
             agoto = True
     finally:
-        if entrada:
-            stdin.close()
+        if archivo_entrada:
+            archivo_entrada.close()
     if codigo < 0:
         senal = NOMBRES_DE_SENALES.get(-codigo, f"señal {-codigo}")
     elif ES_WINDOWS and codigo >= 0xC0000000:
@@ -313,7 +314,8 @@ def medir_cobertura(
         if res.returncode != 0:
             raise ErrorDeCobertura(f"no se pudo enlazar el programa:\n{res.stderr.strip()}")
 
-        ejecuciones = [_correr(programa, Path(e).resolve() if e else None, timeout) for e in (entradas or [None])]
+        casos: List[Optional[Path]] = list(entradas) if entradas else [None]
+        ejecuciones = [_correr(programa, Path(e).resolve() if e else None, timeout) for e in casos]
 
         reporte = ReporteLineas(gcc=version, ejecuciones=ejecuciones, min_lineas=min_lineas, min_ramas=min_ramas)
         for fuente, objeto in zip(fuentes, objetos, strict=False):

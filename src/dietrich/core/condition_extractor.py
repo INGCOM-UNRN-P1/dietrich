@@ -46,7 +46,7 @@ DECISION_NODES = (
 
 def _analizar_decision(file_path: Path, node: Node, cond_node: Node) -> Optional[DecisionPoint]:
     """Construye el punto de decisión evaluando la expresión real, no un patrón sintético."""
-    raw_cond = cond_node.text.decode("utf-8", errors="replace").strip()
+    raw_cond = (cond_node.text or b"").decode("utf-8", errors="replace").strip()
     if raw_cond.startswith("(") and raw_cond.endswith(")"):
         raw_cond = raw_cond[1:-1].strip()
 
