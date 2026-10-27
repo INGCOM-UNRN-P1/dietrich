@@ -13,6 +13,7 @@
 - Identificación de puntos de decisión condicional (`if`, `while`, operadores `&&`, `||`, ternarios `?:`).
 - Demostración de pares de prueba independientes que demuestran que cada condición elemental afecta el resultado de la decisión.
 - Reporte con el porcentaje de condiciones que tienen par de independencia de causa única y la lista de las que no (`missing_independence_pairs`).
+- Tabla de verdad en Markdown de cada decisión compuesta (`dietrich mcdc archivo.c [-o tablas.md]`): las combinaciones que C distingue (con «—» donde el cortocircuito no evalúa), qué condición **decide** el resultado en cada fila, cuál está **enmascarada** y qué filas forman el conjunto mínimo MC/DC; avisa las condiciones **redundantes** (la decisión no depende de ellas) y en ese caso sale con 1.
 - Cobertura **medida** de líneas, ramas y condiciones (`dietrich lines`, con gcc y gcov): el paso previo a MC/DC. Compila con `--coverage`, ejecuta tus pruebas y dice qué líneas no ejecutó ninguna, qué decisiones tomaron un solo camino, qué condición nunca fue verdadera o falsa (gcc 14 o posterior) y qué funciones nunca se llamaron. Con `--por-entrada --json` agrega la huella de cada entrada por separado (las líneas, ramas y valores de condición que ejecutó, compilando una sola vez): es lo que usa `tyrell cubrir` para generar casos que ejerciten las ramas sin cubrir.
 
 ### Qué no cubre (Límites y Delegación)
@@ -92,6 +93,7 @@ Lo que informa `dietrich check` de cada decisión:
 |:--|:--|
 | `dietrich check`, `dietrich analyze` | Analiza condiciones booleanas compuestas (&&, \|\|) y calcula los vectores de prueba requeridos para MC/DC. |
 | `dietrich lines` | Mide qué líneas, ramas y condiciones ejecutan tus pruebas (gcc + gcov): el paso previo a MC/DC. |
+| `dietrich mcdc` | Tabla de verdad en Markdown de cada decisión compuesta: qué condición decide, cuál está enmascarada y cuál sobra. |
 | `dietrich report` | Genera directamente la sección de reporte Markdown de DIETRICH para Dredd. |
 | `dietrich doctor` | Verifica el estado del entorno de análisis MC/DC de DIETRICH. |
 | `dietrich version` | Muestra la versión de DIETRICH. |

@@ -279,6 +279,29 @@ def lines_cmd(
     raise typer.Exit(code=codigo)
 
 
+@app.command("mcdc")
+def mcdc_cmd(
+    target_file: Path = typer.Argument(..., help="Archivo C con las decisiones a tabular", exists=True, dir_okay=False),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Escribir el Markdown en este archivo en lugar de la salida estándar."),
+):
+    """Tabla de verdad en Markdown de cada decisión compuesta: qué condición decide, cuál está enmascarada y cuál sobra.
+
+    Sale con 1 si alguna condición es redundante (la decisión no depende de ella).
+    """
+    from dietrich.core.tabla_verdad import markdown, tablas_de_verdad
+
+    tablas = tablas_de_verdad(target_file)
+    texto = markdown(target_file, tablas)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(texto, encoding="utf-8")
+        console.print(f"[bold green]✓ Tablas de verdad en:[/bold green] {output}")
+    else:
+        print(texto)
+    if any(t.redundantes for t in tablas):
+        raise typer.Exit(code=1)
+
+
 @app.command("report")
 def report_cmd(
     target_file: Path = typer.Argument(..., help="Archivo C a auditar por cobertura MC/DC", exists=True),
