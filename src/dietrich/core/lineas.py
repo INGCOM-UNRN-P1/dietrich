@@ -98,8 +98,22 @@ class CoberturaArchivo(BaseModel):
     funciones_sin_llamar: List[FuncionSinLlamar] = Field(default_factory=list)
 
 
+class Huella(BaseModel):
+    """Lo que ejecutó UNA entrada (`lines --por-entrada`): sirve para elegir casos por lo que suman.
+
+    Cada elemento es un identificador estable dentro de la corrida: `archivo:línea` para las
+    líneas, `archivo:línea:rN` para la rama N de esa línea y `archivo:línea:cK.IV|F` para la
+    condición I del conjunto K que tomó el valor verdadero (V) o falso (F).
+    """
+    entrada: Optional[str] = None
+    ejecucion: Ejecucion
+    lineas: List[str] = Field(default_factory=list)
+    ramas: List[str] = Field(default_factory=list)
+    condiciones: List[str] = Field(default_factory=list)
+
+
 class ReporteLineas(BaseModel):
-    schema_version: str = "1.0.0"
+    schema_version: str = "1.1.0"
     herramienta: str = "dietrich"
     comando: str = "lines"
     gcc: str = ""
@@ -111,6 +125,7 @@ class ReporteLineas(BaseModel):
     min_lineas: float = 0.0
     min_ramas: float = 0.0
     aprobado: bool = True
+    huellas: Optional[List[Huella]] = None  # solo con `por_entrada`
 
 
 def _porcentaje(parte: int, total: int) -> Optional[float]:
@@ -261,6 +276,53 @@ def _analizar_archivo(datos: dict, fuente: Path, condiciones: bool) -> Cobertura
     return resultado
 
 
+def _huella(datos: dict, fuente: Path) -> Tuple[List[str], List[str], List[str]]:
+    """Las líneas, ramas y valores de condición que ejecutó una corrida, según el JSON de gcov."""
+    nombre = fuente.name
+    lineas: List[str] = []
+    ramas: List[str] = []
+    condiciones: List[str] = []
+    for linea in datos.get("lines", []):
+        n = linea["line_number"]
+        if linea["count"] > 0:
+            lineas.append(f"{nombre}:{n}")
+        ramas_validas = [r for r in linea.get("branches", []) if not r.get("throw")]
+        ramas.extend(f"{nombre}:{n}:r{i}" for i, r in enumerate(ramas_validas) if r["count"] > 0)
+        for k, conjunto in enumerate(linea.get("conditions", [])):
+            sin_v, sin_f = set(conjunto.get("not_covered_true", [])), set(conjunto.get("not_covered_false", []))
+            for i in range(conjunto["count"] // 2):
+                if linea["count"] > 0 and i not in sin_v:
+                    condiciones.append(f"{nombre}:{n}:c{k}.{i}V")
+                if linea["count"] > 0 and i not in sin_f:
+                    condiciones.append(f"{nombre}:{n}:c{k}.{i}F")
+    return sorted(set(lineas)), sorted(set(ramas)), sorted(set(condiciones))
+
+
+def _datos_gcov(gcov_bin: str, objeto: Path, fuente: Path, directorio: Path, condiciones: bool) -> dict:
+    comando = [gcov_bin, "--json-format", "--stdout", "--branch-counts", "--branch-probabilities", str(objeto)]
+    if condiciones:
+        comando.insert(1, "--conditions")
+    res = subprocess.run(comando, capture_output=True, text=True, cwd=directorio)
+    datos_del_archivo = None
+    for linea in res.stdout.splitlines():
+        if not linea.startswith("{"):
+            continue
+        try:
+            documento = json.loads(linea)
+        except json.JSONDecodeError:
+            continue
+        for archivo in documento.get("files", []):
+            ruta = Path(archivo["file"])
+            if not ruta.is_absolute():
+                ruta = Path(documento.get("current_working_directory", directorio)) / ruta
+            if ruta.resolve() == fuente:
+                datos_del_archivo = archivo
+    if datos_del_archivo is None:
+        raise ErrorDeCobertura(f"gcov no devolvió datos de {fuente.name} (¿gcc y gcov son de la misma "
+                               f"versión? gcov ≥ 10 hace falta para --json-format):\n{res.stderr.strip()}")
+    return datos_del_archivo
+
+
 def medir_cobertura(
     fuentes: Sequence[Path],
     entradas: Sequence[Path] = (),
@@ -271,11 +333,14 @@ def medir_cobertura(
     min_ramas: float = 0.0,
     gcc: str = "gcc",
     gcov: str = "gcov",
+    por_entrada: bool = False,
 ) -> ReporteLineas:
     """Compila `fuentes` con cobertura, ejecuta el programa y devuelve qué quedó sin ejercitar.
 
     Se mide `medir`; si no se indica, las fuentes que no definen `main` (el código que prueban las
-    pruebas) o, si todas lo definen, todas.
+    pruebas) o, si todas lo definen, todas. Con `por_entrada`, el reporte trae además la huella de
+    cada entrada por separado (compilando una sola vez): es lo que usa `tyrell cubrir` para elegir
+    los casos que suman ramas.
     """
     gcc_bin, gcov_bin = shutil.which(gcc), shutil.which(gcov)
     if not gcc_bin or not gcov_bin:
@@ -315,34 +380,34 @@ def medir_cobertura(
             raise ErrorDeCobertura(f"no se pudo enlazar el programa:\n{res.stderr.strip()}")
 
         casos: List[Optional[Path]] = list(entradas) if entradas else [None]
+        medidos = [(f, o) for f, o in zip(fuentes, objetos, strict=False) if f in medidas]
+
+        huellas: Optional[List[Huella]] = None
+        if por_entrada:
+            # Los contadores de gcov se acumulan en los .gcda: se borran antes de cada corrida.
+            huellas = []
+            for e in casos:
+                for gcda in directorio.glob("*.gcda"):
+                    gcda.unlink()
+                ejecucion = _correr(programa, Path(e).resolve() if e else None, timeout)
+                huella = Huella(entrada=ejecucion.entrada, ejecucion=ejecucion)
+                if any(directorio.glob("*.gcda")):
+                    for fuente, objeto in medidos:
+                        lin, ram, cond = _huella(_datos_gcov(gcov_bin, objeto, fuente, directorio, condiciones),
+                                                 fuente)
+                        huella.lineas += lin
+                        huella.ramas += ram
+                        huella.condiciones += cond
+                huellas.append(huella)
+            for gcda in directorio.glob("*.gcda"):
+                gcda.unlink()
+
         ejecuciones = [_correr(programa, Path(e).resolve() if e else None, timeout) for e in casos]
 
-        reporte = ReporteLineas(gcc=version, ejecuciones=ejecuciones, min_lineas=min_lineas, min_ramas=min_ramas)
-        for fuente, objeto in zip(fuentes, objetos, strict=False):
-            if fuente not in medidas:
-                continue
-            comando = [gcov_bin, "--json-format", "--stdout", "--branch-counts", "--branch-probabilities",
-                       str(objeto)]
-            if condiciones:
-                comando.insert(1, "--conditions")
-            res = subprocess.run(comando, capture_output=True, text=True, cwd=directorio)
-            datos_del_archivo = None
-            for linea in res.stdout.splitlines():
-                if not linea.startswith("{"):
-                    continue
-                try:
-                    documento = json.loads(linea)
-                except json.JSONDecodeError:
-                    continue
-                for archivo in documento.get("files", []):
-                    ruta = Path(archivo["file"])
-                    if not ruta.is_absolute():
-                        ruta = Path(documento.get("current_working_directory", directorio)) / ruta
-                    if ruta.resolve() == fuente:
-                        datos_del_archivo = archivo
-            if datos_del_archivo is None:
-                raise ErrorDeCobertura(f"gcov no devolvió datos de {fuente.name} (¿gcc y gcov son de la misma "
-                                       f"versión? gcov ≥ 10 hace falta para --json-format):\n{res.stderr.strip()}")
+        reporte = ReporteLineas(gcc=version, ejecuciones=ejecuciones, min_lineas=min_lineas, min_ramas=min_ramas,
+                                huellas=huellas)
+        for fuente, objeto in medidos:
+            datos_del_archivo = _datos_gcov(gcov_bin, objeto, fuente, directorio, condiciones)
             reporte.archivos.append(_analizar_archivo(datos_del_archivo, fuente, condiciones))
 
     totales = lambda campo: sum(getattr(a, campo) or 0 for a in reporte.archivos)  # noqa: E731

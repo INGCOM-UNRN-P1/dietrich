@@ -187,13 +187,14 @@ def lines_cmd(
     gcov: str = typer.Option("gcov", "--gcov", help="gcov de la misma versión que el compilador."),
     json_output: bool = typer.Option(False, "--json", help="Emitir salida en formato JSON estructurado"),
     output_md: Optional[Path] = typer.Option(None, "--md", "--output-md", help="Generar sección de reporte en formato Markdown para fusión en Dredd."),
+    por_entrada: bool = typer.Option(False, "--por-entrada", help="Con --json: agregar la huella de cada entrada (líneas, ramas y condiciones que ejecutó), para elegir casos por lo que suman (tyrell cubrir)."),
 ):
     """Mide qué líneas, ramas y condiciones ejecutan tus pruebas (gcc + gcov): el paso previo a MC/DC."""
     import shlex
 
     try:
         reporte = medir_cobertura(fuentes, entrada, solo, shlex.split(cflags), timeout, min_lineas, min_ramas,
-                                  gcc=gcc, gcov=gcov)
+                                  gcc=gcc, gcov=gcov, por_entrada=por_entrada)
     except ErrorDeCobertura as exc:
         console_err.print(f"[bold red]Error:[/bold red] {exc}")
         raise typer.Exit(code=2) from exc

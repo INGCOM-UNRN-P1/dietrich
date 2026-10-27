@@ -13,7 +13,7 @@
 - Identificación de puntos de decisión condicional (`if`, `while`, operadores `&&`, `||`, ternarios `?:`).
 - Demostración de pares de prueba independientes que demuestran que cada condición elemental afecta el resultado de la decisión.
 - Reporte con el porcentaje de condiciones que tienen par de independencia de causa única y la lista de las que no (`missing_independence_pairs`).
-- Cobertura **medida** de líneas, ramas y condiciones (`dietrich lines`, con gcc y gcov): el paso previo a MC/DC. Compila con `--coverage`, ejecuta tus pruebas y dice qué líneas no ejecutó ninguna, qué decisiones tomaron un solo camino, qué condición nunca fue verdadera o falsa (gcc 14 o posterior) y qué funciones nunca se llamaron.
+- Cobertura **medida** de líneas, ramas y condiciones (`dietrich lines`, con gcc y gcov): el paso previo a MC/DC. Compila con `--coverage`, ejecuta tus pruebas y dice qué líneas no ejecutó ninguna, qué decisiones tomaron un solo camino, qué condición nunca fue verdadera o falsa (gcc 14 o posterior) y qué funciones nunca se llamaron. Con `--por-entrada --json` agrega la huella de cada entrada por separado (las líneas, ramas y valores de condición que ejecutó, compilando una sola vez): es lo que usa `tyrell cubrir` para generar casos que ejerciten las ramas sin cubrir.
 
 ### Qué no cubre (Límites y Delegación)
 - Mutation testing de mutantes sintéticos (delegado a `vassili`).

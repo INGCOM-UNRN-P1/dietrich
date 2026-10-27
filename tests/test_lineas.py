@@ -144,7 +144,7 @@ def test_cli_umbral_y_json(tmp_path):
     res = runner.invoke(app, ["lines", str(codigo), str(prueba), "--min-lines", "100", "--json"])
     assert res.exit_code == 1
     datos = json.loads(res.stdout)
-    assert datos["schema_version"] == "1.0.0" and datos["comando"] == "lines" and not datos["aprobado"]
+    assert datos["schema_version"] == "1.1.0" and datos["comando"] == "lines" and not datos["aprobado"]
     res = runner.invoke(app, ["lines", str(codigo), str(prueba), "--only", str(prueba), "--json"])
     assert [Path(a["archivo"]).name for a in json.loads(res.stdout)["archivos"]] == ["test_lista.c"]
 
