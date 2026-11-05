@@ -212,7 +212,7 @@ def lines_cmd(
     for ejecucion in reporte.ejecuciones:
         origen = f"con la entrada {Path(ejecucion.entrada).name}" if ejecucion.entrada else "sin entrada"
         if ejecucion.agoto_tiempo:
-            console.print(f"[yellow]⚠ La ejecución {origen} superó {timeout:g} s y se cortó: ¿un bucle que no "
+            console.print(f"[yellow]⚠ La ejecución {origen} superó {timeout:g} s y se cortó: ¿un lazo que no "
                           "termina? Se cuenta lo ejecutado hasta el corte.[/yellow]")
         elif ejecucion.senal:
             console.print(f"[yellow]⚠ La ejecución {origen} terminó por {ejecucion.senal} (un assert que falla "
